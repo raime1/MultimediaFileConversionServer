@@ -1,0 +1,5 @@
+#Server side
+pip install ffmpeg-python
+
+#Client side
+pip install tqdm #Hacer barras de carga bonitas, no se usa en server porque funciona mal con multithreading

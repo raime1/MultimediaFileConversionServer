@@ -1,0 +1,10 @@
+Generalidades sockets:
+https://www.techwithtim.net/tutorials/socket-programming/
+File transfer:
+https://www.thepythoncode.com/article/send-receive-files-using-sockets-python
+
+https://stackoverflow.com/questions/61434874/sending-multiple-files-from-client-to-server-sockets
+https://www.thepythoncode.com/code/send-receive-files-using-sockets-python
+
+FFmpeg:
+https://kkroening.github.io/ffmpeg-python/#indices-and-tables
