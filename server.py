@@ -1,9 +1,9 @@
 import socket 
 import threading
-import tqdm
 import uuid
 import os
 import shutil
+import ffmpeg
 
 HEADER = 64
 PORT = 5050
@@ -12,6 +12,7 @@ ADDR = (SERVER, PORT)
 FORMAT = 'utf-8'
 BUFFER_SIZE = 4096
 DISCONNECT_MESSAGE = "!DISCONNECT"
+SEPARATOR = "<SEPARATOR>"
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind(ADDR)
@@ -38,30 +39,62 @@ def handle_client(conn, addr):
     conn.close()
         
 def receive_file(conn):
-    filesize = conn.recv(HEADER).decode(FORMAT)
-    filesize = int(filesize)
-
+    info = conn.recv(BUFFER_SIZE).decode(FORMAT)
+    input_ext, output_ext, filesize = info.split(SEPARATOR)
+    
     rd_name = uuid.uuid1().hex
     os.makedirs(rd_name)
 
-    progress = tqdm.tqdm(range(filesize), f"Receiving copy.txt", unit="B", unit_scale=True, unit_divisor=1024)
-    with open(f"{rd_name}/{rd_name}.{input_ext}", "wb") as f:
-        while True:
+    input_file = f"{rd_name}/{rd_name}{input_ext}"
+    output_file = f"{rd_name}/{rd_name}{output_ext}"
+    filesize = int(filesize)
+    print(f"Receiving file...{filesize}")
+    #progress = tqdm.tqdm(range(filesize), f"Receiving {input_ext}", unit="B", unit_scale=True, unit_divisor=1024)
+    with open(input_file, "wb") as f:
+        received_data = 0
+        while received_data < filesize:
             # read 1024 bytes from the socket (receive)
+            print("Receiving data...")
             bytes_read = conn.recv(BUFFER_SIZE)
             if not bytes_read:    
                 # nothing is received
                 # file transmitting is done
+                print("Data received...")
                 break
             # write to the file the bytes we just received
             f.write(bytes_read)
             # update the progress bar
-            progress.update(len(bytes_read))
+            received_data += len(bytes_read)
+            print(received_data)
+            #progress.update(len(bytes_read))
         print("File transfer done...")
         f.close()
-    
-    #shutil.rmtree(f"./{rd_name}")
-    #print("Folder was deleted")
+    print("FILE TRANSFER DONE...")
+    try:
+        print(input_file)
+        print(output_file)
+        ffmpeg.input(input_file).output(output_file).run(capture_stdout= False,capture_stderr=True, overwrite_output=True)
+        print("Conversion done...")
+        #out, err = ffmpeg.input(input_file).output('pipe:', format = 'mp4').run(capture_stdout= True, capture_stderr=True))
+        
+        filesize = os.path.getsize(output_file)
+        conn.send(f"True{SEPARATOR}{filesize}".encode(FORMAT))
+        print(f"True{SEPARATOR}{filesize}")
+        with open(output_file, "rb") as f:
+            bytes_read = f.read(BUFFER_SIZE)
+            while bytes_read: 
+                conn.sendall(bytes_read)
+                bytes_read = f.read(BUFFER_SIZE)
+            f.close()
+        conn.close()
+    except Exception as e:
+        print(f"Error in the conversion process: {e.stderr}")
+        conn.send(f"False{SEPARATOR}{e.stderr}".encode(FORMAT))
+        print("False{SEPARATOR}{e.stderr}")
+        conn.close()
+    finally:   
+        shutil.rmtree(f"./{rd_name}")
+        print("Folder was deleted")
 
 
 def start():

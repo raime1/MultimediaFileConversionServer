@@ -2,7 +2,7 @@ import ffmpeg
 import os
 
 video_exts = [".avi", ".gif", ".mov", ".mp4", ".rawvideo", ".webm"]
-audio_exts = [".aac",".ac3", ".flac", ".mp4", ".wav"]
+audio_exts = [".aac",".ac3", ".flac", ".mp3", ".wav"]
 
 def convert_file(input_file, output_file):
     input_name, input_ext = os.path.splitext(input_file)
