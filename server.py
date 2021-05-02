@@ -16,85 +16,52 @@ SEPARATOR = "<SEPARATOR>"
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind(ADDR)
-
-def handle_client(conn, addr):
-    print(f"[NEW CONNECTION] {addr} connected.")
-
-    connected = True
-    while connected:
-        receive_file(conn)
-        connected = False
-        '''
-        msg_length = conn.recv(HEADER).decode(FORMAT)
-        if msg_length:
-            msg_length = int(msg_length)
-            msg = conn.recv(msg_length).decode(FORMAT)
-            if msg == DISCONNECT_MESSAGE:
-                connected = False
-
-            print(f"[{addr}] {msg}")
-            conn.send("Msg received".encode(FORMAT))
-            '''
-
-    conn.close()
         
-def receive_file(conn):
+def receive_file(conn, addr):
+    print(f"[NEW CONNECTION] {addr} connected.")
+    #Receiving initial info about the file
     info = conn.recv(BUFFER_SIZE).decode(FORMAT)
     input_ext, output_ext, filesize = info.split(SEPARATOR)
-    
+    #Generate a random name for the temporal files
     rd_name = uuid.uuid1().hex
     os.makedirs(rd_name)
 
     input_file = f"{rd_name}/{rd_name}{input_ext}"
     output_file = f"{rd_name}/{rd_name}{output_ext}"
     filesize = int(filesize)
-    print(f"Receiving file...{filesize}")
-    #progress = tqdm.tqdm(range(filesize), f"Receiving {input_ext}", unit="B", unit_scale=True, unit_divisor=1024)
+    print(f"[CONN with {addr}]Receiving file of {filesize} bytes.")
+    #Receive the data of the file
     with open(input_file, "wb") as f:
         received_data = 0
         while received_data < filesize:
-            # read 1024 bytes from the socket (receive)
-            print("Receiving data...")
             bytes_read = conn.recv(BUFFER_SIZE)
-            if not bytes_read:    
-                # nothing is received
-                # file transmitting is done
-                print("Data received...")
-                break
             # write to the file the bytes we just received
             f.write(bytes_read)
-            # update the progress bar
             received_data += len(bytes_read)
-            print(received_data)
-            #progress.update(len(bytes_read))
-        print("File transfer done...")
         f.close()
-    print("FILE TRANSFER DONE...")
+    print(f"[CONN with {addr}]File transfer done, init conversion.")
     try:
-        print(input_file)
-        print(output_file)
+        #Exe file conversion
         ffmpeg.input(input_file).output(output_file).run(capture_stdout= False,capture_stderr=True, overwrite_output=True)
-        print("Conversion done...")
-        #out, err = ffmpeg.input(input_file).output('pipe:', format = 'mp4').run(capture_stdout= True, capture_stderr=True))
-        
+        print(f"[CONN with {addr}]Conversion done, init file transfer.")
+        #Get info of converted file and send it to client
         filesize = os.path.getsize(output_file)
         conn.send(f"True{SEPARATOR}{filesize}".encode(FORMAT))
-        print(f"True{SEPARATOR}{filesize}")
+        #Send file in chunk of buffer size
         with open(output_file, "rb") as f:
             bytes_read = f.read(BUFFER_SIZE)
             while bytes_read: 
                 conn.sendall(bytes_read)
                 bytes_read = f.read(BUFFER_SIZE)
             f.close()
-        conn.close()
     except Exception as e:
-        print(f"Error in the conversion process: {e.stderr}")
-        conn.send(f"False{SEPARATOR}{e.stderr}".encode(FORMAT))
-        print("False{SEPARATOR}{e.stderr}")
-        conn.close()
+        print(f"[CONN with {addr}]Error in the conversion process.")
+        conn.send(f"False{SEPARATOR}Error in the conversion process".encode(FORMAT))
     finally:   
+        #Close connection to client and remove temporal files
+        conn.close()
         shutil.rmtree(f"./{rd_name}")
-        print("Folder was deleted")
+        print(f"[CONN with {addr}]Folder was deleted and conn closed.")
 
 
 def start():
@@ -102,7 +69,7 @@ def start():
     print(f"[LISTENING] Server is listening on {SERVER}")
     while True:
         conn, addr = server.accept()
-        thread = threading.Thread(target=handle_client, args=(conn, addr))
+        thread = threading.Thread(target=receive_file, args=(conn, addr))
         thread.start()
         print(f"[ACTIVE CONNECTIONS] {threading.activeCount() - 1}")
 
